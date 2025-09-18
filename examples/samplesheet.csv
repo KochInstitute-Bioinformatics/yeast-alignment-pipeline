@@ -1,0 +1,5 @@
+sample,fastq_1,fastq_2,vector
+yeast_sample1,/path/to/sample1_R1.fastq.gz,/path/to/sample1_R2.fastq.gz,/path/to/vector1.fasta
+yeast_sample2,/path/to/sample2_R1.fastq.gz,/path/to/sample2_R2.fastq.gz,
+control_sample,/path/to/control_R1.fastq.gz,/path/to/control_R2.fastq.gz,/path/to/vector2.fasta
+single_end_sample,/path/to/single_R1.fastq.gz,,

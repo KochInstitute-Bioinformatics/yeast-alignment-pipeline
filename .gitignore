@@ -1,0 +1,39 @@
+# Nextflow files
+.nextflow*
+work/
+results/
+*.log
+
+# Singularity cache (optional - you might want to keep this)
+singularity_cache/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# R
+.Rhistory
+.RData
+.Rproj.user/
+
+# Test data (uncomment if you don't want to track test data)
+# test_data/
+# *.fastq.gz
+# *.fasta
+# *.fa
+
+# Slurm logs (if using HPC)
+slurm-*.out
