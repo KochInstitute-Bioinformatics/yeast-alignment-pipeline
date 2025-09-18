@@ -4,16 +4,16 @@ process BWA_INDEX {
     publishDir "${params.outdir}/genome", mode: 'copy'
     
     input:
-    path fasta
+    tuple val(vector_key), path(fasta)
     
     output:
-    tuple val("${fasta.baseName}"), path("bwa_index"), emit: index
+    tuple val(vector_key), val("${fasta.baseName}"), path("bwa_index_${vector_key}"), emit: index
     path "versions.yml", emit: versions
     
     script:
     """
-    mkdir bwa_index
-    bwa index -p bwa_index/${fasta.baseName} $fasta
+    mkdir bwa_index_${vector_key}
+    bwa index -p bwa_index_${vector_key}/${fasta.baseName} $fasta
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

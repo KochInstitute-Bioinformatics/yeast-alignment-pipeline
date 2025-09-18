@@ -4,6 +4,7 @@ include { BWA_INDEX } from '../modules/bwa_index'
 include { BWA_ALIGN } from '../modules/bwa_align'
 include { SAMTOOLS_SORT } from '../modules/samtools_sort'
 include { SAMTOOLS_INDEX } from '../modules/samtools_index'
+include { SAMTOOLS_FAIDX } from '../modules/samtools_faidx'
 include { MULTIQC } from '../modules/multiqc'
 
 workflow YEAST_ALIGNMENT {
@@ -36,18 +37,43 @@ workflow YEAST_ALIGNMENT {
     // Create reference genome channel
     reference_ch = Channel.fromPath(reference_fasta, checkIfExists: true)
     
-    // Collect all unique vector files
-    vector_files_ch = reads_ch
-        .filter { meta, reads -> meta.vector != null && meta.vector != "" }
-        .map { meta, reads -> file(meta.vector, checkIfExists: true) }
+    // Group samples by their vector file to create unique reference combinations
+    vector_groups = reads_ch
+        .map { meta, reads -> 
+            def vector_key = meta.vector ? file(meta.vector).baseName : "WT_only"
+            def vector_file = meta.vector ? file(meta.vector, checkIfExists: true) : null
+            return [vector_key, vector_file, meta, reads]
+        }
+        .groupTuple(by: [0, 1])
+        .map { vector_key, vector_file_list, metas, reads_list ->
+            // Handle the vector file - take first non-null entry
+            def vector_file = vector_file_list.find { it != null }
+            return [vector_key, vector_file, metas, reads_list]
+        }
+    
+    // Create unique reference combinations
+    reference_combinations = vector_groups
+        .map { vector_key, vector_file, metas, reads_list ->
+            return [vector_key, vector_file]
+        }
         .unique()
-        .collect()
-        .ifEmpty([])
     
-    // Concatenate genome with vectors (if any vectors exist)
-    CONCATENATE_GENOME(reference_ch, vector_files_ch)
+    // Create combined references for each unique combination
+    CONCATENATE_GENOME(
+        reference_combinations.combine(reference_ch)
+            .map { vector_key, vector_file, ref_fasta -> 
+                def vector_files = vector_file ? [vector_file] : []
+                return [vector_key, ref_fasta, vector_files]
+            }
+    )
     
-    // Run FastQC on raw reads (this should process all samples)
+    // Create FASTA index for each reference
+    SAMTOOLS_FAIDX(CONCATENATE_GENOME.out.fasta)
+    
+    // Index each unique reference with BWA
+    BWA_INDEX(CONCATENATE_GENOME.out.fasta)
+    
+    // Run FastQC on raw reads
     if (!params.skip_fastqc) {
         FASTQC(reads_ch)
         fastqc_ch = FASTQC.out.zip.map { meta, files -> files }.flatten()
@@ -55,11 +81,19 @@ workflow YEAST_ALIGNMENT {
         fastqc_ch = Channel.empty()
     }
     
-    // Index the combined reference genome
-    BWA_INDEX(CONCATENATE_GENOME.out.fasta)
+    // Prepare alignment input by matching samples to their appropriate reference
+    alignment_input = vector_groups
+        .transpose()
+        .map { vector_key, vector_file, meta, reads ->
+            return [vector_key, meta, reads]
+        }
+        .combine(BWA_INDEX.out.index, by: 0)
+        .map { vector_key, meta, reads, index_name, index_path ->
+            return [meta, reads, index_name, index_path]
+        }
     
-    // Align reads to combined reference - FIX: Use combine instead of passing tuple
-    BWA_ALIGN(reads_ch.combine(BWA_INDEX.out.index))
+    // Align reads to appropriate reference
+    BWA_ALIGN(alignment_input)
     
     // Sort BAM files
     SAMTOOLS_SORT(BWA_ALIGN.out.bam)
@@ -81,5 +115,6 @@ workflow YEAST_ALIGNMENT {
     emit:
     bam = SAMTOOLS_SORT.out.bam
     bai = SAMTOOLS_INDEX.out.bai
-    combined_reference = CONCATENATE_GENOME.out.fasta
+    combined_references = CONCATENATE_GENOME.out.fasta
+    reference_indices = SAMTOOLS_FAIDX.out.fai
 }
