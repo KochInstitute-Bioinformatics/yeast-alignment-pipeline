@@ -5,6 +5,7 @@ include { BWA_ALIGN } from '../modules/bwa_align'
 include { SAMTOOLS_SORT } from '../modules/samtools_sort'
 include { SAMTOOLS_INDEX } from '../modules/samtools_index'
 include { SAMTOOLS_FAIDX } from '../modules/samtools_faidx'
+include { BAMCOVERAGE_BIGWIG } from '../modules/bamcoverage_bigwig'  // Add this line
 include { MULTIQC } from '../modules/multiqc'
 
 workflow YEAST_ALIGNMENT {
@@ -27,6 +28,7 @@ workflow YEAST_ALIGNMENT {
             def reads = meta.single_end ?
                 [file(row.fastq_1, checkIfExists: true)] :
                 [file(row.fastq_1, checkIfExists: true), file(row.fastq_2, checkIfExists: true)]
+            
             return [meta, reads]
         }
 
@@ -100,6 +102,14 @@ workflow YEAST_ALIGNMENT {
     // Index sorted BAM files
     SAMTOOLS_INDEX(SAMTOOLS_SORT.out.bam)
 
+    // Generate BigWig files from sorted and indexed BAM files
+    bam_bai_ch = SAMTOOLS_SORT.out.bam
+        .join(SAMTOOLS_INDEX.out.bai, by: 0)
+    
+    if (!params.skip_bigwig) {  // Add parameter to optionally skip BigWig generation
+        BAMCOVERAGE_BIGWIG(bam_bai_ch)
+    }
+
     // Collect all QC files for MultiQC
     if (!params.skip_multiqc) {
         multiqc_files = Channel.empty()
@@ -107,13 +117,14 @@ workflow YEAST_ALIGNMENT {
             .mix(BWA_ALIGN.out.log.map { meta, files -> files }.flatten())
             .mix(SAMTOOLS_SORT.out.stats.map { meta, files -> files }.flatten())
             .collect()
-
+        
         MULTIQC(multiqc_files)
     }
 
     emit:
     bam = SAMTOOLS_SORT.out.bam
     bai = SAMTOOLS_INDEX.out.bai
+    bigwig = params.skip_bigwig ? Channel.empty() : BAMCOVERAGE_BIGWIG.out.bigwig
     combined_references = CONCATENATE_GENOME.out.fasta
     reference_indices = SAMTOOLS_FAIDX.out.fai
 }
