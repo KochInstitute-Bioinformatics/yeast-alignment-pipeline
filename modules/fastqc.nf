@@ -13,7 +13,7 @@ process FASTQC {
     
     script:
     def args = task.ext.args ?: ''
-    def prefix = task.ext.prefix ?: "${meta.id}"
+    def _prefix = task.ext.prefix ?: "${meta.id}"
     """
     fastqc $args --threads $task.cpus $reads
     

@@ -54,7 +54,7 @@ workflow YEAST_ALIGNMENT {
 
     // Create unique reference combinations
     reference_combinations = vector_groups
-        .map { vector_key, vector_file, metas, reads_list ->
+        .map { vector_key, vector_file, _metas, _reads_list ->
             return [vector_key, vector_file]
         }
         .unique()
@@ -77,7 +77,7 @@ workflow YEAST_ALIGNMENT {
     // Run FastQC on raw reads
     if (!params.skip_fastqc) {
         FASTQC(reads_ch)
-        fastqc_ch = FASTQC.out.zip.map { meta, files -> files }.flatten()
+        fastqc_ch = FASTQC.out.zip.map { _meta, files -> files }.flatten()
     } else {
         fastqc_ch = Channel.empty()
     }
@@ -85,11 +85,11 @@ workflow YEAST_ALIGNMENT {
     // Prepare alignment input by matching samples to their appropriate reference
     alignment_input = vector_groups
         .transpose()
-        .map { vector_key, vector_file, meta, reads ->
+        .map { vector_key, _vector_file, meta, reads ->
             return [vector_key, meta, reads]
         }
         .combine(BWA_INDEX.out.index, by: 0)
-        .map { vector_key, meta, reads, index_name, index_path ->
+        .map { _vector_key, meta, reads, index_name, index_path ->
             return [meta, reads, index_name, index_path]
         }
 
@@ -114,8 +114,8 @@ workflow YEAST_ALIGNMENT {
     if (!params.skip_multiqc) {
         multiqc_files = Channel.empty()
             .mix(fastqc_ch)
-            .mix(BWA_ALIGN.out.log.map { meta, files -> files }.flatten())
-            .mix(SAMTOOLS_SORT.out.stats.map { meta, files -> files }.flatten())
+            .mix(BWA_ALIGN.out.log.map { _meta, files -> files }.flatten())
+            .mix(SAMTOOLS_SORT.out.stats.map { _meta, files -> files }.flatten())
             .collect()
         
         MULTIQC(multiqc_files)
