@@ -1,6 +1,5 @@
 process CONCATENATE_GENOME {
     label 'process_low'
-    
     publishDir "${params.outdir}/genome", mode: 'copy'
     
     input:
@@ -30,20 +29,12 @@ process CONCATENATE_GENOME {
         for vector_file in $vector_files; do
             echo "Adding vector: \$vector_file" >> ${vector_key}_info.txt
             
-            # Modify headers to include vector identifier
-            vector_name=\$(basename \$vector_file .fasta)
-            vector_name=\$(basename \$vector_name .fa)
+            # Add vector sequences with original FASTA headers (just the defline value)
+            cat \$vector_file >> $output_name
             
-            # Add vector sequences with modified headers
-            awk -v vname="\$vector_name" '
-                /^>/ { 
-                    gsub(/^>/, ">vector_" vname "_")
-                    print
-                } 
-                !/^>/ { print }
-            ' \$vector_file >> $output_name
-            
-            echo "  - \$vector_file (as vector_\${vector_name}_*)" >> ${vector_key}_info.txt
+            # Extract the header names for logging
+            vector_headers=\$(grep '^>' \$vector_file | sed 's/^>//' | tr '\\n' ',' | sed 's/,\$//')
+            echo "  - \$vector_file (headers: \$vector_headers)" >> ${vector_key}_info.txt
         done
     else
         echo "No vector files provided - using WT genome only" >> ${vector_key}_info.txt
